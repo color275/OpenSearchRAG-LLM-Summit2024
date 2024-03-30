@@ -9,6 +9,14 @@ import os
 from faker import Faker
 from dotenv import load_dotenv
 
+# Example usage
+# 1. product
+# 2. basket
+# 3. order
+weights = [7, 2, 1]
+product_ids = list(range(1, 21))  # 상품 ID 1부터 20까지
+product_weights = [9, 1, 3, 2, 3, 4, 3, 2, 1, 2, 3, 4, 2, 4, 3, 2, 1, 2, 3, 4]
+
 fake = Faker()
 
 load_dotenv()
@@ -55,9 +63,9 @@ def insert_order_to_database(connection, order_id, promo_id, order_cnt, order_pr
         except pymysql.MySQLError as err:
             print(f"Error: {err}")
 
-def generate_log_entry(order_id_counter, weights, timestamp, fake):
+def generate_log_entry(order_id_counter, timestamp, fake):
     client_ip = fake.ipv4()
-    product_id = random.randint(1, 20)
+    product_id = random.choices(product_ids, weights=product_weights, k=1)[0]  # 가중치에 따라 상품 ID 선택
     customer_id = random.randint(1, 100)
     request_types = ['products', 'basket', 'order']
     request_type = random.choices(request_types, weights=weights, k=1)[0]
@@ -66,14 +74,14 @@ def generate_log_entry(order_id_counter, weights, timestamp, fake):
         request_line = f'"GET /products?product_id={product_id}&customer_id={customer_id} HTTP/1.1"'
     elif request_type == 'basket':
         request_line = f'"GET /basket?product_id={product_id}&customer_id={customer_id} HTTP/1.1"'
-    else:  # orders
+    else:  # 'order'
         request_line = f'"GET /order?order_id={order_id_counter}&product_id={product_id}&customer_id={customer_id} HTTP/1.1"'
         order_id_counter += 1
 
     log_entry = f"{timestamp} {client_ip} - - {request_line} 200 1576\n"
     return log_entry, order_id_counter, request_type, product_id, customer_id
 
-def write_logs_with_db_insertion(db_config, cnt_per_sec, weights=[1, 1, 1]):
+def write_logs_with_db_insertion(db_config, cnt_per_sec):
     db_connection = connect_to_database(db_config)
     if db_connection is None:
         return
@@ -86,7 +94,7 @@ def write_logs_with_db_insertion(db_config, cnt_per_sec, weights=[1, 1, 1]):
     i = 0
     while True:
         timestamp = datetime.datetime.now().strftime("|%Y-%m-%d %H:%M:%S|")
-        log_entry, order_id_counter, request_type, product_id, customer_id = generate_log_entry(order_id_counter, weights, timestamp, fake)
+        log_entry, order_id_counter, request_type, product_id, customer_id = generate_log_entry(order_id_counter, timestamp, fake)
         
         with open(filename, 'a') as file:
             file.write(log_entry)
@@ -104,12 +112,8 @@ def write_logs_with_db_insertion(db_config, cnt_per_sec, weights=[1, 1, 1]):
             i = 0
 
 
-# Example usage
-# 1. product
-# 2. basket
-# 3. order
-weights = [7, 2, 1]
+
 # 초당 5건
 cnt_per_sec = 5
 
-write_logs_with_db_insertion(db_config, cnt_per_sec, weights)
+write_logs_with_db_insertion(db_config, cnt_per_sec)
