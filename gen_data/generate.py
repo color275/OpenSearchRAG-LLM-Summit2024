@@ -1,3 +1,6 @@
+# cd /home/ec2-user/OpenSearchRAG-LLM-Summit2024/gen_data
+# nohup python generate.py &
+
 import random
 import datetime
 import pymysql
@@ -78,7 +81,7 @@ def write_logs_with_db_insertion(db_config, cnt_per_sec, weights=[1, 1, 1]):
     order_id_counter = get_max_order_id(db_connection)
     
     today_date = datetime.datetime.now().strftime("%Y%m%d")
-    filename = f"accesslog/access_log_{today_date}.txt"
+    filename = f"accesslog/access_log_{today_date}.log"
 
     i = 0
     while True:
