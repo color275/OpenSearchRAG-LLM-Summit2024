@@ -29,7 +29,9 @@ from typing import Any
 from langchain.memory.chat_message_histories import DynamoDBChatMessageHistory
 from langchain.memory import ConversationBufferMemory
 
-identity_id = 'test030'
+identity_id = 'SESSION-ID-02'
+
+
 
 def get_memory_from_dynamo(session_id):
   chat_history = DynamoDBChatMessageHistory(table_name="memories-dev", session_id=session_id)
@@ -53,18 +55,12 @@ class StreamHandler(BaseCallbackHandler):
     
     def on_llm_start(self, *args: Any, **kwargs: Any):
         self.text = self.initial_text
-        # # Weird code. But just works fine.
-        # with st.chat_message("assistant"):
-        #     self.container = st.empty()
 
     def on_llm_new_token(self, token: str, **kwargs: Any) -> None:
-        # Add to UI Only
         self.text += token
         self.container.markdown(self.text, unsafe_allow_html=True)
-        # print(token, end="")
 
     def on_llm_end(self, *args: Any, **kwargs: Any) -> None:
-        # Add to state
         st.session_state.messages.append({
             "role": "assistant",
             "type": "text",
@@ -75,27 +71,19 @@ class StreamHandler(BaseCallbackHandler):
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# - <font color='#32CD32;'><b>어제 판매된 상품 기준으로 주문 금액 TOP 5 를 알려줘</b></font><br>
-# - <font color='#32CD32;'><b>지난 일주일간 주문 실적을 일 별로 알려줘</b></font><br>
-# - <font color='#32CD32;'><b>최근 5분 동안 총주문금액과 총주문수량을 분 단위로 알려줘</b></font><br>
-# - <font color='#32CD32;'><b>오늘 총 주문금액이 가장 적은 상품을 알려줘</b></font><br>
 
 INIT_MESSAGE = {"role": "assistant",
                 "type": "text",
                 "content": """
-안녕하세요. 저는 <font color='red'><b>Amazon Bedrock과 Claude3</b></font>를 활용해서 여러분들이 찾고 싶은 데이터를 대신 찾아줄 <i><b>[데이터가 궁금해]<i><b> 입니다. 
-<br>아래와 같이 질문해보세요.
-- <font color='#32CD32;'><b>주문 전환율에 대해 설명해줄래?</b></font><br>
-- <font color='#32CD32;'><b>최근 5분 간 상품 별 주문전환율 top 5 데이터를 알려줘</b></font><br>
-- <font color='#32CD32;'><b>이벤트를 다시 했다. 최근 5분 간 상품 별 주문전환율 top 5 데이터를 알려줘</b></font><br>
+저는 <font color='red'><b>Amazon OpenSearch</b></font> 와 <font color='red'><b>Amazon Bedrock</b></font>를 활용해서 데이터를 대신 찾아줄 <font color='red'><b>Bot</b></font> 입니다. 
+<br>궁금한 것을 물어보세요.
+- <font color='#32CD32;'><b>우리회사의 주문전환율에 대해 설명해줘</b></font><br>
+- <font color='#32CD32;'><b>우리회사의 최근 1시간 동안 상품 별 주문전환율 top 5 데이터를 알려줘</b></font><br>
 ---
 무엇을 도와드릴까요?"""}
 
 select_options = ['용어가 궁금해', '데이터가 궁금해']
 
-
-
-################################################################################
 
 load_dotenv()
 opensearch_username = os.getenv('OPENSEARCH_USERNAME')
@@ -113,7 +101,6 @@ stop_record_count = 100
 record_stop_yn = False
 bedrock_model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
 bedrock_embedding_model_id = "amazon.titan-embed-text-v1"
-################################################################################
 
 def get_athena_client() :
     athena_client = boto3.client('athena',
@@ -296,12 +283,13 @@ def analytics_in_data(question, data):
     prompt_template = """
     Use the following pieces of context to answer the question at the end.
     질문을 통해 얻은 데이터이다. 
-    데이터를 테이블 형태로 표시해줘.
     데이터의 의미를 설명해줘. 
-    인사이트 단어는 초록색으로 표시하고 인사이트 단어 앞에 :thinking_face: 를 적어줘.
+    데이터를 테이블 형태로 표시하고 1위 상품의 중요 숫자는 (주문전환율 등) 빨간색으로 표시해줘.
+    인사이트 단어는 초록색으로 표시하고 인사이트 단어 앞에 :star2: 를 적어줘.
     데이터의 의미 부분에서 숫자는 빨간색으로 표시해줘. 색깔을 위한 태그는 span 을 사용해.
-    금액은 1000자리 마다 콤마를 표시해줘.
-    과거 대화 이력의 데이터와 차이가 있다면 차이에 대한 인사이트를 함께 알려줘. 예를 들면 1위 상품의 변화가 있었는지 등.
+    금액은 1000자리 마다 콤마를 표시해줘.    
+    과거 대화 이력의 데이터와 차이가 있다면 원인에 대해 설명해줘.
+    조회수는 많지만 주문전환율이 낮은 상품에 대해 설명해줘.
     context 정보는 무시해.
     {context}
     
@@ -320,10 +308,9 @@ def analytics_in_data(question, data):
     ...
 
     데이터의 의미와 얻을 수 있는 인사이트는 다음과 같습니다. 
-    - ...
-    - ...
+    - 현재 데이터
+    - 과거 데이터와의 비교, 1위 순위가 변경되었다면 그 상품명을 알려줘.
     """
-
 
     data = data.replace("{","")
     data = data.replace("}","")
@@ -334,13 +321,6 @@ def analytics_in_data(question, data):
             template=prompt_template % (chat_history, data), 
             input_variables=["context", "chat_history", "question"]
         )
-
-    # qa = RetrievalQA.from_chain_type(llm=bedrock_llm,
-    #                                      chain_type="stuff",
-    #                                      retriever=opensearch_vector_search_client.as_retriever(),
-    #                                      return_source_documents=True,
-    #                                      chain_type_kwargs={
-    #                                          "prompt": prompt_template})
 
     qa = RetrievalQA.from_chain_type(llm=bedrock_llm,
                                         chain_type="stuff",
@@ -374,28 +354,10 @@ def find_answer_in_sentences(select_option, question):
     
     
     prompt_template = {
-        # 비즈니스 용어
-        # Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer. don't include harmful content
-        # 0 : """
-        #     You are a Bioinformatics expert with immense knowledge and experience in the field.
-        #     Answer my questions based on your knowledge and our older conversation. Do not make up answers.
-        #     If you do not know the answer to a question, just say "I don't know".
-
-        #     {context}
-
-        #     Given the following conversation and a follow up question, answer the question.
-
-        #     %s
-
-        #     question: {question}
-        #     """,
-            # 너는 A회사에서 근무하는 직원들에게 내부 용어, 계산식, 그리고 데이터 조회를 도와주는 "데이터가 궁금해" 라는 이름을 가진 챗봇이다. 
-            # context에 제공된 내용이 없다면 반드시 모른다고 대답해줘.
-            # context에 제공된 내용이 있다면 질문한 것에 대한 정의와 계산식 그리고 데이터를 찾을 수 있는 위치를 테이블 형태로 대답해줘. SQL은 작성하지마.
         0 : """
             너는 A회사에서 근무하는 직원들에게 내부 용어, 계산식, 그리고 데이터 조회를 도와주는 챗봇이다. 
-            context에 제공된 내용이 없다면 반드시 모른다고 대답해줘.
-            context에 제공된 내용이 있다면 질문한 것에 대한 정의와 계산식 그리고 데이터를 찾을 수 있는 위치를 테이블 형태로 대답해줘. SQL은 작성하지마.
+            context에 제공된 내용이 없다면 반드시 알수없다고 대답해줘.
+            context에 제공된 내용이 있다면 질문한 것에 대한 정의와 계산식 그리고 데이터를 찾을 수 있는 위치를 markdown 을 사용해서 행 중심의 테이블 형식으로 대답해줘. SQL은 작성하지마.
             데이터를 찾을 수 있는 위치는 붉은색으로 표시해줘.
             {context}
 
@@ -406,14 +368,9 @@ def find_answer_in_sentences(select_option, question):
             * Question: {question}
             * Answer:
             """,
-        # 데이터 조회
-            # 과거 대화 이력에 제공되었던 SQL 이라면 SQL을 MARKDOWN 의 TOGGLE 형태의 포맷으로 작성해줘.
-            # 데이터 요청을 한다면 SQL를 제공해줘.
-            # 다음 대화와 후속 질문이 주어지면 질문에 대답해줘.
-            # %s
         1 : """
             너는 A회사에서 근무하는 직원들에게 내부 용어, 계산식, 그리고 데이터 조회를 도와주는 챗봇이다. 
-            데이터 요청을 하면 context에 정확한 데이터베이스명, 테이블명, 컬럼명이 모두 없을 경우에는 예측해서 SQL을 작성하지 말고 반드시 모른다고 대답해줘.
+            데이터 요청을 하면 context에 정확한 데이터베이스명, 테이블명, 컬럼명이 없다면 예측해서 SQL을 작성하지 말고 테이블명을 알려달라고 말해줘.
             데이터 요청을 하면 context에 정확한 테이블명과 컬럼명이 모두 있을 경우에만 AWS ATHENA에서 실행 가능한 SQL 을 MARKDOWN 코드의 SQL태그 안에 작성해줘, SQL 은 <details open><summary>SQL제목</summary>```sql\nSQL```</details> 포맷으로 작성해줘.
             {context}
 
@@ -425,10 +382,8 @@ def find_answer_in_sentences(select_option, question):
         
     print("## prompt : ", prompt_template[select_option])
     
-    # memory, chat_history = get_memory_from_dynamo(identity_id)
 
     prompt = PromptTemplate(
-        # template=prompt_template[select_option] % (chat_history), input_variables=["context", "chat_history", "question"]
         template=prompt_template[select_option], input_variables=["context", "question"]
     )
 
@@ -440,21 +395,11 @@ def find_answer_in_sentences(select_option, question):
                                         return_source_documents=False,
                                         chain_type_kwargs={
                                             "prompt": prompt})
-    # response = qa(question,
-    #                 return_only_outputs=False)
     
     response = qa(question,
                     return_only_outputs=False)
 
     return f"{response.get('result')}"
-    # except Exception as e:
-    #     if 'index_not_found_exception' in str(e):
-    #         st.error('인덱스를 찾을 수 없습니다. PDF 파일을 업로드 했는지 확인해주세요')
-    #     else:
-    #         print(str(e))
-    #         # st.error('답변을 찾는 과정에서 예상치 못한 오류가 발생했습니다.')
-    #         st.error(str(e))
-    #     return "오류로 인해 답변을 제공할 수 없습니다."
 
 def connect_to_database():
     return pymysql.connect(
@@ -516,30 +461,26 @@ def execute_query_athena(client, sql):
 
 
 def main():
+    
 
     
     opensearch_client = get_opensearch_cluster_client()
-    st.set_page_config(page_title='🤖 Chat with Bedrock', layout='wide')
-    # st.header('_Chatbot_ using :blue[OpenSearch] :sunglasses:', divider='rainbow')
-    st.header(':blue[데이터가] _궁금해_ :sunglasses:', divider='rainbow')    
+    st.set_page_config(page_title='🤖 AWS Summit 2024', layout='wide')
+    st.header(':blue[데이터가] _궁금해 ?!_', divider='rainbow')    
 
     if 'qa_history' not in st.session_state:
         st.session_state.qa_history = []
 
     with st.sidebar:
         
-        st.sidebar.markdown(
-            ':smile: **Createby:** chiholee@amazon.com', unsafe_allow_html=True)
-        st.sidebar.markdown('---')
         selected_option = st.sidebar.selectbox(
             '어떤 옵션을 선택하시겠습니까?',
             select_options
         )
         selected_index = select_options.index(selected_option)
         st.session_state.select_option = selected_index
-        # st.write(st.session_state.select_option)
         st.sidebar.markdown('---')
-        st.title("RAG Embedding")
+        st.title("🔍 RAG Embedding")
         pdf_file = st.file_uploader(
             "PDF 업로드를 통해 추가 학습을 할 수 있습니다.", type=["pdf"], key=None)
         
@@ -548,8 +489,6 @@ def main():
             st.session_state.last_uploaded = None
 
         if pdf_file is not None and pdf_file != st.session_state.last_uploaded:
-            # 기존 인덱스 삭제
-            # opensearch_client.indices.delete(index=index_name)
 
             progress_text = st.empty()
             st.session_state['progress_bar'] = st.progress(0)
@@ -563,15 +502,19 @@ def main():
                 st.session_state.last_uploaded = pdf_file
                 st.success(f"{record_cnt} Vector 임베딩 완료!")
         
-        if st.button("기존 업로드 문서 삭제"):
+        if st.button("기존 인덱스 삭제"):
             exists = opensearch_client.indices.exists(index=index_name)
 
             if exists:
                 opensearch_client.indices.delete(index=index_name)
                 create_opensearch_index(opensearch_client)            
                 logging.info("OpenSearch index successfully deleted")
-                st.success("OpenSearch 인덱스가 성공적으로 삭제되었습니다.")
+                st.success("OpenSearch 인덱스가 성공적으로 삭제/생성되었습니다.")
+            else :
+                create_opensearch_index(opensearch_client)            
+                st.success("OpenSearch 인덱스가 성공적으로 생성되었습니다.")
 
+        st.sidebar.markdown('---')
 
     if "messages" not in st.session_state.keys():
         st.session_state.messages = [INIT_MESSAGE]
@@ -605,7 +548,6 @@ def main():
                         df = execute_query_athena(get_athena_client(), sql)
                         analytics_in_data(question, df)
                 except Exception as e:                    
-                    # st.error("SQL 수행 중 에러가 발생했습니다. 다시 시도해주세요.")
                     print("# 에러", str(e))
                     pass
 
