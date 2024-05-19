@@ -23,6 +23,12 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### Start
+```
+export AWS_DEFAULT_REGION='us-west-2'
+streamlit run app.py
+```
+
 
 ### Capture
 ![](img/2024-04-06-15-09-36.png)
