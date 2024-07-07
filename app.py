@@ -1,3 +1,7 @@
+# export AWS_DEFAULT_REGION='us-west-2'
+# nohup streamlit run app.py --server.port 8503 &
+# ssh -i /Users/chiholee/Desktop/Project/keys/summit2024-key.pem -L 13306:summit2024.cluster-cdoccmmce0bj.ap-northeast-2.rds.amazonaws.com:3306 ec2-user@52.79.232.79
+
 import streamlit as st
 import fitz
 import logging
@@ -26,6 +30,8 @@ from langchain.memory.chat_message_histories import DynamoDBChatMessageHistory
 from langchain.memory import ConversationBufferMemory
 
 identity_id = 'SESSION-ID-02'
+
+
 
 def get_memory_from_dynamo(session_id):
   chat_history = DynamoDBChatMessageHistory(table_name="memories-dev", session_id=session_id)
@@ -60,6 +66,8 @@ class StreamHandler(BaseCallbackHandler):
             "type": "text",
             "content": self.text
         })
+        
+
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
